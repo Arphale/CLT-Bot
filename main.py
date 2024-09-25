@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import os
 import asyncio
 from datetime import datetime, timedelta
+import json
 
 # Load environment variables from .env file
 load_dotenv()
@@ -21,9 +22,36 @@ ongoing_drafts = {}
 picked_weapons = set()  # To keep track of picked weapons
 draft_acceptances = {}  # To track user acceptance for drafts
 
-# Load valid weapons from the file
-with open("weaponNames.txt", "r") as file:
-    valid_weapons = {line.strip().lower() for line in file}
+# Global dictionary to store available weapons by weapon line
+available_weapons_by_line = {}
+valid_weapons = []
+
+
+# Function to load the available weapons from the 'weapons' directory
+def load_available_weapons():
+    global valid_weapons
+    global available_weapons_by_line
+    weapons_folder = 'weapons'
+
+    # Iterate over weapon line folders
+    for weapon_line in os.listdir(weapons_folder):
+        weapon_line_path = os.path.join(weapons_folder, weapon_line)
+
+        # Ensure it's a directory
+        if os.path.isdir(weapon_line_path):
+            weapons = []
+            # Iterate over the image files in the weapon line directory
+            for file in os.listdir(weapon_line_path):
+                if file.endswith('.png'):
+                    weapon_name = os.path.splitext(file)[0]  # Remove '.png'
+                    weapons.append(weapon_name)
+                    valid_weapons.append(weapon_name.strip().lower())
+
+            # Store the weapons under their weapon line
+            available_weapons_by_line[weapon_line] = weapons
+
+# Call this function once during bot startup or when loading weapons
+load_available_weapons()
 
 # Command to set a timer
 @client.command(name="timer")
@@ -68,6 +96,7 @@ async def accept_draft(ctx, action: str):
                 draft_data = list(ongoing_drafts.values())  # Get both users' draft data
 
                 blue_side_user_data, red_side_user_data = None, None
+
                 if draft_data[0]["blueSide"]:
                     blue_side_user_data = draft_data[0]
                     red_side_user_data = draft_data[1]
@@ -97,23 +126,23 @@ async def accept_draft(ctx, action: str):
 async def get_draft_status():
     draft_status = []
     
-    max_mention_length = max(len(str(client.get_user(user_id).mention)) for user_id in ongoing_drafts)
-    max_weapon_length = 20  # Set a fixed length for weapon names
+    # Calculate the maximum length of the usernames for alignment
+    max_mention_length = max(len(str(client.get_user(user_id))) for user_id in ongoing_drafts)
+    max_weapon_length = 17  # Set a fixed length for weapon names
 
     for user_id, data in ongoing_drafts.items():
         # Format weapon names with fixed length using .ljust()
         formatted_picks = [f"`{weapon.ljust(max_weapon_length)}`" for weapon in data["picks"]] or ["`None`"]
         picks = ", ".join(formatted_picks)
-        
-        # Adjust the length of the mention so all align
-        mention = client.get_user(user_id).mention.ljust(max_mention_length)
-        draft_status.append(f"{mention}: {picks}")
-    
+
+        # Adjust the length of the stripped mention (username without discriminator)
+        stripped_mention = str(client.get_user(user_id)).ljust(max_mention_length)
+        draft_status.append(f"`{stripped_mention}`: {picks}")
     return "\n".join(draft_status)
 
-
-
 async def prompt_pick(ctx, picking_user, other_user):
+    global valid_weapons
+
     # Determine pick label
     pick_number = ongoing_drafts[picking_user.id]["pick_count"]
     pick_label = f"B{pick_number}" if ongoing_drafts[picking_user.id]["blueSide"] else f"R{pick_number}"
@@ -136,9 +165,11 @@ async def prompt_pick(ctx, picking_user, other_user):
         try:
             msg = await client.wait_for("message", check=check, timeout=time_limit)
             weapon = msg.content[6:].strip().lower()  # Remove the "!pick " part
-
+            
             # Check if the weapon is in the valid weapons list
             if weapon not in valid_weapons:
+                print(f"weapon: {weapon}")
+                print(valid_weapons)
                 await ctx.send(f"{picking_user.mention}, '{weapon}' is not a valid weapon! Please choose a valid weapon from the list.")
                 # Continue to loop until a valid weapon is chosen
                 continue
@@ -173,7 +204,6 @@ async def next_turn(ctx, previous_picking_user, other_user):
     red_picks = len(ongoing_drafts[red_side_user.id]["picks"])
 
     # Draft logic based on number of picks
-    print(f"blue_picks: {blue_picks}; red_picks: {red_picks}")
     if blue_picks == 0 and red_picks == 0:
         await prompt_pick(ctx, blue_side_user, red_side_user)  # B1
     if blue_picks == 1 and red_picks == 0:
@@ -198,52 +228,94 @@ async def next_turn(ctx, previous_picking_user, other_user):
         await end_draft(ctx=ctx, user1=blue_side_user,user2=red_side_user)
 
 async def end_draft(ctx, user1, user2):
-    picks_user1 = ", ".join(ongoing_drafts[user1.id]["picks"])
-    picks_user2 = ", ".join(ongoing_drafts[user2.id]["picks"])
-
-    await ctx.send(f"Draft complete! Here are the picks:\n{user1.mention}: {picks_user1}\n{user2.mention}: {picks_user2}")
-
+    status = await get_draft_status()
+    await ctx.send(status)
+    store_draft(ctx,user1,user2)
     # Cleanup
     cleanup_draft(ctx, user1, user2)
 
-def cleanup_draft(ctx, user1, user2):
-    # Remove users from ongoing drafts
-    ongoing_drafts.pop(user1.id, None)
-    ongoing_drafts.pop(user2.id, None)
-    draft_acceptances.pop(user1.id, None)
-    draft_acceptances.pop(user2.id, None)
+def store_draft(ctx,user1,user2):
+    
+    blue_side_user = user1 if ongoing_drafts[user1.id]["blueSide"] == True else user2
+    red_side_user = user2 if blue_side_user == user1 else user1
+    now = datetime.now()
+    draft={}
+    fileName = f"drafts\\{blue_side_user.name}_vs_{red_side_user.name}_{now.strftime('%m_%d_%Y_%H-%M-%S.json')}"
+    
+    with open(file=fileName,mode="w+") as file:
+        draft["blue_user"]=blue_side_user.name
+        draft["red_user"]=red_side_user.name
+        draft["date and time"]=now.strftime('%m/%d/%Y %H:%M:%S')
+        draft["b1"]=ongoing_drafts[blue_side_user.id]["picks"][0]
+        draft["b2"]=ongoing_drafts[blue_side_user.id]["picks"][1]
+        draft["b3"]=ongoing_drafts[blue_side_user.id]["picks"][2]
+        draft["b4"]=ongoing_drafts[blue_side_user.id]["picks"][3]
+        draft["b5"]=ongoing_drafts[blue_side_user.id]["picks"][4]
+        draft["r1"]=ongoing_drafts[red_side_user.id]["picks"][0]
+        draft["r2"]=ongoing_drafts[red_side_user.id]["picks"][1]
+        draft["r3"]=ongoing_drafts[red_side_user.id]["picks"][2]
+        draft["r4"]=ongoing_drafts[red_side_user.id]["picks"][3]
+        draft["r5"]=ongoing_drafts[red_side_user.id]["picks"][4]
+        json.dump(draft,file)
 
-# Command to list all the banned weapons for the draft the author is in
+def cleanup_draft(ctx, blue_side_user, red_side_user):
+    global picked_weapons
+
+    # Cleanup logic here
+    del ongoing_drafts[blue_side_user.id]
+    del ongoing_drafts[red_side_user.id]
+    draft_acceptances.pop(blue_side_user.id, None)
+    draft_acceptances.pop(red_side_user.id, None)
+    picked_weapons = set() 
+
 @client.command(name="banned")
-async def banned_weapons(ctx):
+async def list_banned(ctx):
     if ctx.author.id not in ongoing_drafts:
-        await ctx.send("You are not part of an ongoing draft.")
+        await ctx.send("You are not currently part of any draft.")
         return
+    
+    banned_weapons = [weapon for weapon in picked_weapons]
+    
+    # Format banned weapons
+    max_weapon_length = 20  # Ensuring consistent length
+    formatted_banned = [f"`{weapon.ljust(max_weapon_length)}`" for weapon in banned_weapons] or ["`None`"]
+    
+    await ctx.send(f"**Banned Weapons:**\n{', '.join(formatted_banned)}")
 
-    # Get the set of banned weapons (picked by both players)
-    banned_weapons_list = sorted(list(picked_weapons))
-
-    if banned_weapons_list:
-        banned_weapons_str = ", ".join(banned_weapons_list)
-        await ctx.send(f"Banned weapons so far: {banned_weapons_str}")
-    else:
-        await ctx.send("No weapons have been banned yet.")
-# Command to list all available weapons for the draft the author is in
-
+# Command to list available weapons by weapon line
 @client.command(name="available")
-async def available_weapons(ctx):
-    if ctx.author.id not in ongoing_drafts:
-        await ctx.send("You are not part of an ongoing draft.")
-        return
+async def list_available(ctx):
+    response = "**Available Weapons by Weapon Line:**\n"
+    maxWeaponLength = 17
+    # Format the weapons per weapon line
+    for weapon_line, weapons in available_weapons_by_line.items():
+        availableWeapons=[]
+        for weapon in weapons:
+            if weapon.strip().lower() not in picked_weapons:
+                availableWeapons.append(f"`{weapon.ljust(maxWeaponLength)}`") 
+        
+        formatted_weapons = ', '.join(availableWeapons)
+        response += f"\n**`{weapon_line.capitalize().ljust(12)}:`** {formatted_weapons}"
 
-    # Get the available weapons (valid weapons not yet picked)
-    available_weapons_list = sorted(list(valid_weapons - picked_weapons))
+    # Split the message if it exceeds Discord's character limit
+    if len(response) > 2000:
+        lines = response.split("\n")
+        firstMsg = ""
+        secondMsg = ""
+        index = 0
+        while index < len(lines) and len(firstMsg)+len(lines[index])<2000:
+            firstMsg += lines[index] + "\n"
+            print(firstMsg)
+            index+=1
+        while index < len(lines):
+            secondMsg += lines[index]+ "\n"
+            print(secondMsg)
+            index+=1
 
-    if available_weapons_list:
-        available_weapons_str = ", ".join(available_weapons_list)
-        await ctx.send(f"Available weapons: {available_weapons_str}")
+        await ctx.send(firstMsg)
+        await ctx.send(secondMsg)
     else:
-        await ctx.send("No available weapons left.")
+        await ctx.send(response)
 
-# Run the bot with the token from the environment variable
-client.run(os.getenv('TOKEN'))
+# Run the bot
+client.run(os.getenv("TOKEN"))
