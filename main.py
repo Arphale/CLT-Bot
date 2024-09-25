@@ -128,7 +128,7 @@ async def get_draft_status():
     
     # Calculate the maximum length of the usernames for alignment
     max_mention_length = max(len(str(client.get_user(user_id))) for user_id in ongoing_drafts)
-    max_weapon_length = 17  # Set a fixed length for weapon names
+    max_weapon_length = 20  # Set a fixed length for weapon names
 
     for user_id, data in ongoing_drafts.items():
         # Format weapon names with fixed length using .ljust()
@@ -168,8 +168,6 @@ async def prompt_pick(ctx, picking_user, other_user):
             
             # Check if the weapon is in the valid weapons list
             if weapon not in valid_weapons:
-                print(f"weapon: {weapon}")
-                print(valid_weapons)
                 await ctx.send(f"{picking_user.mention}, '{weapon}' is not a valid weapon! Please choose a valid weapon from the list.")
                 # Continue to loop until a valid weapon is chosen
                 continue
@@ -286,7 +284,7 @@ async def list_banned(ctx):
 @client.command(name="available")
 async def list_available(ctx):
     response = "**Available Weapons by Weapon Line:**\n"
-    maxWeaponLength = 17
+    maxWeaponLength = 18
     # Format the weapons per weapon line
     for weapon_line, weapons in available_weapons_by_line.items():
         availableWeapons=[]
@@ -305,11 +303,9 @@ async def list_available(ctx):
         index = 0
         while index < len(lines) and len(firstMsg)+len(lines[index])<2000:
             firstMsg += lines[index] + "\n"
-            print(firstMsg)
             index+=1
         while index < len(lines):
             secondMsg += lines[index]+ "\n"
-            print(secondMsg)
             index+=1
 
         await ctx.send(firstMsg)
