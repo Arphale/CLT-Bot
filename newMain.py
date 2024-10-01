@@ -59,32 +59,67 @@ def accepted(user_1,user_2):
 
 @client.command(name="bo3")
 async def bo3(ctx,user_1:discord.Member,user_2:discord.Member):
-    global valid_weapons,ongoing_drafts,waiting_on_confirmation,client
-    waiting_on_confirmation.add(user_1)
-    waiting_on_confirmation.add(user_2)
-    time_limit = 5
-    future_time = datetime.now() + timedelta(minutes=time_limit)
-    unix_timestamp = int(future_time.timestamp())
-    await ctx.send(f"Draft started between {user_1.mention} and {user_2.mention}!\nBoth users need to accept the draft using `!accept`. You have {time_limit} minutes. (<t:{unix_timestamp}:R>) ")
-
-    def check(msg):
-        return(
-            msg.author in waiting_on_confirmation
-            and msg.channel == ctx.channel
-            and msg.content.startswith("!accept")
-        )
-
-    while not accepted(user_1,user_2):
-        try:
-            msg = await client.wait_for("message",check=check,timeout=time_limit*60)
-            waiting_on_confirmation.remove(msg.author)
-        except TimeoutError:
-            await ctx.send(f"The match was not accepted in time.")
-            return
-
     best_of_three = series(client=client,user_1=user_1,user_2=user_2,list_of_valid=valid_weapons)
-    ongoing_drafts.add(best_of_three)
-    await best_of_three.run(ctx=ctx)
+    if best_of_three.confirm_series(ctx=ctx):
+        ongoing_drafts.add(best_of_three)
+        await best_of_three.run(ctx=ctx)
+
+def find_current_draft(user:discord.user):
+    for draft in ongoing_drafts:
+        if user == draft.user_1 or user == draft.user_2:
+            return draft
+    return -1
+
+@client.command(name="banned")
+async def list_banned(ctx):
+    draft = find_current_draft(ctx.author)
+    if draft == -1:
+        await ctx.send("You are not currently part of any draft.")
+        return
+    
+    # Format banned weapons
+    max_weapon_length=max(len(weapon) for weapon in draft.list_of_bans or ["None"])
+    formatted_banned = [f"`{weapon.ljust(max_weapon_length)}`" for weapon in draft.list_of_bans] or ["`None`"]
+    
+    await ctx.send(f"**Banned Weapons:**\n{', '.join(formatted_banned)}")
+
+# Command to list available weapons by weapon line
+@client.command(name="available")
+async def list_available(ctx):
+    global valid_weapons_by_line
+    draft = find_current_draft(ctx.author)
+    if draft == -1:
+        await ctx.send("You are not currently part of any draft.")
+        return
+    response = "**Available Weapons by Weapon Line:**\n"
+    maxWeaponLength = 18
+    # Format the weapons per weapon line
+    for weapon_line, weapons in valid_weapons_by_line.items():
+        availableWeapons=[]
+        for weapon in weapons:
+            if weapon.strip().lower() not in draft.list_of_bans:
+                availableWeapons.append(f"`{weapon.ljust(maxWeaponLength)}`") 
+        
+        formatted_weapons = ', '.join(availableWeapons)
+        response += f"\n**`{weapon_line.capitalize().ljust(12)}:`** {formatted_weapons}"
+
+    # Split the message if it exceeds Discord's character limit
+    if len(response) > 2000:
+        lines = response.split("\n")
+        firstMsg = ""
+        secondMsg = ""
+        index = 0
+        while index < len(lines) and len(firstMsg)+len(lines[index])<2000:
+            firstMsg += lines[index] + "\n"
+            index+=1
+        while index < len(lines):
+            secondMsg += lines[index]+ "\n"
+            index+=1
+
+        await ctx.send(firstMsg)
+        await ctx.send(secondMsg)
+    else:
+        await ctx.send(response)
 
 
 # Run the bot

@@ -8,11 +8,11 @@ class draft:
         self.blue_side_user = blue_side_user
         self.red_side_user = red_side_user
         self.list_of_valid = list_of_valid
+        self.list_of_banned = list_of_bans
 
         self.gameNb = gameNb
         self.list_blue_picks = []
         self.list_red_picks = []
-        self.list_of_banned = list_of_bans
         self.winner = None
 
     def __str__(self) -> str:
@@ -23,7 +23,7 @@ class draft:
 
     async def run(self,ctx):
         await self.promptPick(user=self.blue_side_user,ctx=ctx)
-        await self.promptPick(user=self.red_side_user,ctx=ctx)
+        await self.promptPick(user=self.red_side_user,ctx=ctx)  
         await self.promptPick(user=self.red_side_user,ctx=ctx)
         await self.promptPick(user=self.blue_side_user,ctx=ctx)
         await self.promptPick(user=self.blue_side_user,ctx=ctx)
@@ -86,6 +86,7 @@ class draft:
                 else:
                     weapon =  self.list_of_valid[random.randint(0,len(self.list_of_valid)-1)]
                     await ctx.send(f"{user.mention} has selected a random weapon, he gets {weapon}.")
+                    
 
                 if blue_side:
                     self.list_blue_picks.append(weapon)
