@@ -18,13 +18,13 @@ class series:
         self.list_of_valid = list_of_valid
         self.list_of_bans = []
         self.waiting_on_confirmation = set()
+        self.winner = None
 
     def __str__(self) -> str:
         
         string = f"{self.date_start}\nBest of Three Series between {self.user_1.mention} and {self.user_2.mention}\n"
         if (len(self.drafts))>0:
             for draft in self.drafts:
-                print(type(draft))
                 string += str(draft) +"\n"
         else:
             string += "Waiting for game 1 draft"
@@ -37,17 +37,26 @@ class series:
             False
 
     async def run(self,ctx):
-        if await self.confirm_series(ctx=ctx):
-            while not (self.user_1_score>=self.score_to_win or self.user_2_score>=self.score_to_win):
-                game = draft(client=self.client,blue_side_user=self.user_1,red_side_user=self.user_2,list_of_valid=self.list_of_valid,list_of_bans=self.list_of_bans)
-                self.drafts.append(game)
-                await ctx.send(f"*Beginning GAME {len(self.drafts)}*")
-                await game.run(ctx=ctx)
-                await self.updateScore(game)
-                await self.ready_for_next_game(ctx=ctx)
-                self.list_of_bans=game.list_of_banned
-                
-                continue
+        while not (self.user_1_score>=self.score_to_win or self.user_2_score>=self.score_to_win):
+            await self.ready_for_next_game(ctx=ctx)
+            game = draft(client=self.client,blue_side_user=self.user_1,red_side_user=self.user_2,list_of_valid=self.list_of_valid,list_of_bans=self.list_of_bans,gameNb=len(self.drafts)+1)
+            self.drafts.append(game)
+            await ctx.send(f"**Beginning GAME {len(self.drafts)}**")
+            await game.run(ctx=ctx)
+            await self.updateScore(game)
+            self.list_of_bans=game.list_of_banned
+            continue
+        if (self.user_1_score>=self.score_to_win or self.user_2_score>=self.score_to_win):
+            await self.conclude_series(ctx=ctx)
+    
+    async def conclude_series(self,ctx):
+        if self.user_1_score>=self.score_to_win:
+            self.winner = self.user_1
+        elif self.user_2_score>=self.score_to_win:
+            self.winer = self.user_2
+        else:
+            raise Exception("Something went wrong, no winner was declared")
+        await ctx.send(f"{str(self)}\n {self.winner.mention} WINS THE SERIES!")
 
 
     async def confirm_series(self,ctx,timeout:int=300)->bool:

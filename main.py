@@ -16,6 +16,7 @@ client = commands.Bot(command_prefix="!", intents=intents)
 
 # Draft data storage
 ongoing_drafts = set()
+past_drafts = set()
 waiting_on_confirmation = set()
 
 # Global dictionary to store available weapons by weapon line
@@ -59,9 +60,10 @@ def accepted(user_1,user_2):
 @client.command(name="bo3")
 async def bo3(ctx,user_1:discord.Member,user_2:discord.Member):
     best_of_three = series(client=client,user_1=user_1,user_2=user_2,list_of_valid=valid_weapons)
-    if best_of_three.confirm_series(ctx=ctx):
+    if await best_of_three.confirm_series(ctx=ctx):
         ongoing_drafts.add(best_of_three)
         await best_of_three.run(ctx=ctx)
+    past_drafts.add(best_of_three)
 
 def find_current_draft(user:discord.user):
     for draft in ongoing_drafts:
@@ -119,6 +121,18 @@ async def list_available(ctx):
         await ctx.send(secondMsg)
     else:
         await ctx.send(response)
+
+@client.command(name="clthelp")
+async def CLThelp(ctx):
+    help_message = """
+## This Bot was made by Arepha to help organize the draft for the Crystal Lockout Tournament and enforce its rules.
+Here are the commands you may use and how to use them:
+- `!bo3 @USER1 @USER1` replace @USER1 and @USER2 you want to organize the best of 3 series with. Both player will the be prompted to accept the challenge, if they do the bot proceeds with the best of 3 series
+- `!pick WEAPON` use this command while in a draft to pick a weapon if you are currently in a draft. replace WEAPON with its english name, it is not case sensitive. You can check which weapons can be picked and how to spell them using the next command
+- `!available` use this command while in a draft to see the weapons that can still be picked and how to spell them
+- `!banned` use this command while in a draft to get a list of the weapons banned so far    
+    """
+    await ctx.reply(help_message)
 
 
 # Run the bot

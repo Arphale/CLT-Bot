@@ -16,9 +16,9 @@ class draft:
         self.winner = None
 
     def __str__(self) -> str:
-        string = f"Game {self.gameNb}: {self.blue_side_user.mention} vs {self.red_side_user.mention} \n {self.get_draft_status()} \n"
+        string = f"Game {self.gameNb}: {self.blue_side_user.mention} vs {self.red_side_user.mention}\n{self.get_draft_status()}\n"
         if self.winner is not None:
-            string += f". winner: {self.winner.mention}" 
+            string += f"winner: {self.winner.mention}" 
         return  (string)
 
     async def run(self,ctx):
