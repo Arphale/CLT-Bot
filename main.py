@@ -3,7 +3,6 @@ from discord.ext import commands
 from dotenv import load_dotenv
 import os
 from series import series
-from datetime import datetime,timedelta
 # Load environment variables from .env file
 load_dotenv()
 
