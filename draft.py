@@ -32,26 +32,26 @@ class draft:
         await self.promptPick(user=self.blue_side_user,ctx=ctx)
         await self.promptPick(user=self.blue_side_user,ctx=ctx)
         await self.promptPick(user=self.red_side_user,ctx=ctx)
+        await ctx.send(self.get_draft_status())
         await self.getWinner(ctx=ctx)
 
-
-    async def get_draft_status(self)->str:
+    def get_draft_status(self)->str:
         draft_status = []
         users = [self.blue_side_user,self.red_side_user]
         # Calculate the maximum length of the usernames for alignment
         max_mention_length = max(len(str(self.client.get_user(user.id))) for user in users)
-        max_weapon_length = max(len(weapon) for weapon in self.list_blue_picks+self.list_red_picks or ["`None`"]) # Set a fixed length for weapon names
+        max_weapon_length = max(len(weapon) for weapon in self.list_blue_picks+self.list_red_picks or ["None"]) # Set a fixed length for weapon names
 
 
         # blue side formatting
         stripped_mention = str(self.client.get_user(self.blue_side_user.id)).ljust(max_mention_length)
-        formatted_picks = [f"`{weapon.ljust(max_weapon_length)}`" for weapon in self.list_blue_picks or ["`None`"]]
+        formatted_picks = [f"`{weapon.ljust(max_weapon_length)}`" for weapon in self.list_blue_picks or ["None"]]
         picks = ", ".join(formatted_picks)
         draft_status.append(f"`{stripped_mention}`: {picks}")
 
         # red side formatting
         stripped_mention = str(self.client.get_user(self.red_side_user.id)).ljust(max_mention_length)
-        formatted_picks = [f"`{weapon.ljust(max_weapon_length)}`" for weapon in self.list_red_picks or ["`None`"]]
+        formatted_picks = [f"`{weapon.ljust(max_weapon_length)}`" for weapon in self.list_red_picks or ["None"]]
         picks = ", ".join(formatted_picks)
         draft_status.append(f"`{stripped_mention}`: {picks}")
 
@@ -67,7 +67,7 @@ class draft:
         time_limit = 60
         future_time = datetime.now() + timedelta(seconds=time_limit)
         unix_timestamp = int(future_time.timestamp())
-        draft_status = await self.get_draft_status()
+        draft_status = self.get_draft_status()
         await ctx.send(f"{user.mention}, pick {pick_label} using the `!pick WEAPON` command (replace WEAPON with your pick). You have {time_limit} seconds. (<t:{unix_timestamp}:R>)\n\nCurrent Draft Status:\n{draft_status}")
         while True:
             def check(msg):
@@ -76,12 +76,17 @@ class draft:
             try:
                 msg = await self.client.wait_for("message", check=check, timeout=time_limit)
                 weapon = msg.content[6:].strip().lower()  # Remove the "!pick " part
-                if weapon not in self.list_of_valid:
-                    await ctx.send(f"{user.mention}, '{weapon}' is not a valid weapon! Please choose a valid weapon from the list.")
-                    continue
-                if weapon in self.list_of_banned:
-                    await ctx.send(f"{user.mention}, the weapon '{weapon}' has already been picked! Please choose a different one.")
-                    continue
+                if weapon !="random":
+                    if weapon not in self.list_of_valid:
+                        await ctx.send(f"{user.mention}, '{weapon}' is not a valid weapon! Please choose a valid weapon from the list.")
+                        continue
+                    if weapon in self.list_of_banned:
+                        await ctx.send(f"{user.mention}, the weapon '{weapon}' has already been picked! Please choose a different one.")
+                        continue
+                else:
+                    weapon =  self.list_of_valid[random.randint(0,len(self.list_of_valid)-1)]
+                    await ctx.send(f"{user.mention} has selected a random weapon, he gets {weapon}.")
+
                 if blue_side:
                     self.list_blue_picks.append(weapon)
                 else:
@@ -89,6 +94,7 @@ class draft:
                 self.list_of_banned.append(weapon)
                 await ctx.send(f"{user.mention} picked {weapon}.")
                 break  # Exit loop after a valid pick
+                 
 
             except TimeoutError:
                 await ctx.send(f"{user.mention} took too long! picking random weapon.")

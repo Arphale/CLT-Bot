@@ -22,7 +22,8 @@ class series:
         string = f"{self.date_start}\nBest of Three Series between {self.user_1.mention} and {self.user_2.mention}\n"
         if (len(self.drafts))>0:
             for draft in self.drafts:
-                string += draft +"\n"
+                print(draft)
+                string += str(draft) +"\n"
         else:
             string += "Waiting for game 1 draft"
         return string
